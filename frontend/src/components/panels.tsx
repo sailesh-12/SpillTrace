@@ -321,6 +321,7 @@ export function CandidatesPanel(props: { d: Layers; selected: Candidate | null; 
       <div className="grid max-h-[50vh] gap-1.5 overflow-y-auto pr-0.5">
         {r.candidates.map((c: Candidate) => {
           const sel = props.selected?.vessel.mmsi === c.vessel.mmsi;
+          const rb = props.d.impact?.robustness?.candidates?.find((x: any) => x.mmsi === c.vessel.mmsi);
           return (
             <button key={c.vessel.mmsi} onClick={() => props.select(c)}
               className={cn("group grid grid-cols-[28px_1fr_auto] items-center gap-2.5 rounded-xl border p-2 text-left transition",
@@ -339,6 +340,7 @@ export function CandidatesPanel(props: { d: Layers; selected: Candidate | null; 
               <div className="text-right">
                 <div className="font-mono text-base font-bold leading-none text-slate-50">{n(c.score, 0)}</div>
                 <div className="mt-1 font-mono text-[10px] text-slate-400">{n(c.source_distance_km, 1)} km · {n(c.time_difference_hours, 1)} h</div>
+                {rb && <div className="font-mono text-[9.5px] text-cyan-300/80" title="Share of weight perturbations in which this vessel ranks first">P(#1) {n(100 * rb.p_rank1, 0)}%</div>}
               </div>
             </button>);
         })}

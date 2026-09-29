@@ -145,3 +145,12 @@ storage:
   backend: file             # file | postgis
   output_dir: outputs
   postgis_dsn: postgresql://sih:sih@localhost:5432/sih26143
+
+impact:                     # novelty: severity index, shoreline threat, response plan, intercepts, evidence seal
+  enabled: true
+  weights: {size: 0.20, coast: 0.15, beaching: 0.25, sensitivity: 0.25, persistence: 0.15}
+  thickness_um: {low: 0.3, central: 5.0, high: 50.0}   # Bonn Agreement appearance codes (planning range)
+  oil_density_t_m3: 0.9
+  beach_buffer_km: 0.5
+  site_path_buffer_km: 15.0
+  max_extrapolation_hours: 240.0

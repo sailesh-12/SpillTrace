@@ -144,6 +144,26 @@ Downloads retry 3× with fewer connections. Example (synthetic scene off Mumbai,
 phase 1 ≈ 20 s, phase 2 ≈ 25 s; trail OIL_LIKELY with ship-trail pattern, window starts at T, #1 candidate is the
 discharging vessel (SAR-attached).
 
+## 4d. Novel features — from "who did it" to "what to do now"
+
+Runs automatically after candidate scoring (`backend/app/impact/`, config `impact:`), is shown in the console step
+**6 · Impact & response**, in the report (section 6b) and on the map. Every part is advisory and degrades gracefully.
+
+| Feature | What it does | How |
+|---|---|---|
+| **Spill Severity & Impact Index (SSII, 0–100)** | Prioritises the response: LOW / MODERATE / HIGH / CRITICAL with a per-factor breakdown | size (log area) · coast proximity · beaching threat · most-sensitive receptor threatened (discounted by ETA) · oil persistence & wind dispersion; weights in config |
+| **Volume range → NOS-DCP tier** | Planning estimate of spilled volume and response tier | area × assumed thickness (Bonn Agreement appearance codes 0.3–50 µm); Tier 1 < 700 t, Tier 2 700–10 000 t, Tier 3 > 10 000 t |
+| **Shoreline ETA** | When and where oil reaches the coast | OpenOil forward forecast (≥ 1 % of particles within 0.5 km of the GSHHG shoreline), else extrapolation of the forecast drift vector until it meets land (labelled) |
+| **Threatened sensitive receptors** | Mangroves, coral reefs, turtle-nesting beaches, lagoons, power-plant seawater intakes, ports, fishing harbours, tourism beaches — with ETA | 31-site Indian gazetteer (approximate reference points, **not official ESI maps**) |
+| **Immediate response action plan** | Prioritised (P1–P3), time-boxed actions with the responsible agency | rules aligned with NOS-DCP roles (ICG MRCC Mumbai / Chennai / Port Blair, ports, State/UT, DG Shipping): notify, verify, sample for fingerprinting, protect receptors before ETA, contain (wind limit), dispersant guidance, inspect suspects, identify dark vessels, re-task satellite |
+| **Next-port intercept** | Where to inspect each suspect vessel and when | last AIS course/speed → Indian port ahead (±40°, same sea basin), straight-line ETA; flags AIS silence inside the area |
+| **Ranking robustness** | Does the #1 candidate depend on the (uncalibrated) weights? | 2 000 Dirichlet perturbations of the Evidence Correlation Score weights → P(#1), P(top-3), verdict ROBUST / LIKELY / CONTESTED |
+| **Tamper-evident evidence seal** | Chain of custody for MARPOL prosecution | SHA-256 manifest of every artifact, root + chain hash across re-analyses; `GET /api/spill/{id}/verify` reports modified / missing files |
+| **POLREP draft** | Ready-to-review pollution report for the MRCC | POLWARN / POLINF / POLFAC structure, nautical positions; `GET /api/spill/{id}/polrep` (never sent automatically) |
+
+New endpoints: `POST /api/spill/{id}/impact` (recompute + re-seal, e.g. for older analyses), `GET /api/spill/{id}/verify`,
+`GET /api/spill/{id}/polrep`. With SYNTHETIC inputs the plan and POLREP are marked *exercise only*.
+
 ## 5. Prerequisites & versions
 Windows 10/11, Linux or macOS · **Python 3.14.3** (3.12+ fine) · **Node 24.14** (20+) · ~10 GB free disk (AIS cache ≈ 0.25 GB per day) · internet access · NVIDIA GPU optional (verified on RTX 5050, CUDA 13).
 
@@ -217,7 +237,7 @@ Open **http://localhost:8000** — a landing page (project brief, why it is need
 
 ## 13. Tests
 ```powershell
-.\.venv\Scripts\python -m pytest -q tests        # 47 tests, ~1.5 min, offline
+.\.venv\Scripts\python -m pytest -q tests        # 54 tests, ~1.5 min, offline
 ```
 The tests use deterministic synthetic fixtures (`tests/fixtures/`, a labelled twin experiment with a planted vessel). **The application never reads them**; they exist so the science can be verified offline and reproducibly.
 

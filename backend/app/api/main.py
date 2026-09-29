@@ -80,6 +80,8 @@ def _warm_up():
         get_mask()
         from app.segmentation.model_loader import load_model
         load_model(cfg.path(cfg.segmentation.model_path), cfg.segmentation.encoder_name, cfg.segmentation.device)
+        from app.impact.coast import _world       # GSHHG polygons for the impact assessment (~4 s)
+        _world()
         log.info("warm-up done in %.0f s", time.time() - t)
     except Exception as exc:  # warm-up is an optimisation only
         log.warning("warm-up failed: %s", exc)
@@ -104,7 +106,8 @@ UPLOADS.mkdir(parents=True, exist_ok=True)
 ARTIFACTS = {"scene.jpg", "scene.png", "mask.png", "probability.png", "report.html", "report.md", "report.json", "spill.geojson",
              "spill.json", "spill_selected.geojson", "triage.json", "candidates.json", "acquisition.json",
              "drift/summary.json", "drift/forward_summary.json", "drift/backward_particles.json",
-             "drift/forward_particles.json", "drift/source_probability.geojson", "ais/tracks.geojson"}
+             "drift/forward_particles.json", "drift/source_probability.geojson", "ais/tracks.geojson",
+             "impact.json", "evidence_manifest.json"}
 
 
 class SceneAnalysisRequest(BaseModel):
@@ -375,8 +378,48 @@ def get_layers(sid: str):
             "spill_geojson": opt("spill.geojson"), "drift": opt("drift/summary.json"),
             "forward": opt("drift/forward_summary.json"), "source_probability": opt("drift/source_probability.geojson"),
             "backward_particles": opt("drift/backward_particles.json"), "forward_particles": opt("drift/forward_particles.json"),
-            "ais_tracks": opt("ais/tracks.geojson"), "candidates": opt("candidates.json"),
+            "ais_tracks": opt("ais/tracks.geojson"), "candidates": opt("candidates.json"), "impact": opt("impact.json"),
+            "evidence_seal": _seal_summary(an),
             "report_html_url": f"/api/spill/{sid}/report?format=html", "report_md_url": f"/api/spill/{sid}/report?format=md"}
+
+
+def _seal_summary(an):
+    try:
+        m = an.load("evidence_manifest.json")
+    except FileNotFoundError:
+        return None
+    return {k: m.get(k) for k in ("root", "chain", "version", "sealed_at", "n_files", "algorithm")}
+
+
+# ---- novelty: impact & response, evidence integrity ---------------------------------------------------
+@app.post("/api/spill/{sid}/impact")
+def recompute_impact(sid: str):
+    """(Re)compute the severity index, shoreline threat, response plan, intercepts and robustness; re-seal."""
+    an = _analysis(sid)
+    with _qlock:
+        if sid in _queue:
+            raise HTTPException(409, "This analysis is still running; impact is computed automatically at the end.")
+    from app.impact.service import assess_impact, seal_evidence
+    try:
+        imp = assess_impact(an)
+    except FileNotFoundError as exc:
+        raise HTTPException(422, str(exc))
+    seal_evidence(an)
+    return imp
+
+
+@app.get("/api/spill/{sid}/verify")
+def verify_evidence(sid: str):
+    """Recompute SHA-256 hashes of all artifacts and compare with the sealed manifest."""
+    from app.impact.custody import verify
+    an = _analysis(sid)
+    return verify(an.repo.dir(sid))
+
+
+@app.get("/api/spill/{sid}/polrep")
+def get_polrep(sid: str):
+    imp = _load(sid, "impact.json")
+    return PlainTextResponse(imp["polrep"], headers={"Content-Disposition": f"attachment; filename={sid}_POLREP_draft.txt"})
 
 
 @app.get("/api/spill/{sid}/files/{name:path}")

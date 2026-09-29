@@ -44,6 +44,7 @@ export interface Layers {
   spill_geojson: FC | null; drift: any; forward: any; source_probability: FC | null;
   backward_particles: Frames | null; forward_particles: Frames | null;
   ais_tracks: FC | null; candidates: any; report_html_url: string; report_md_url: string;
+  impact?: any; evidence_seal?: { root: string; chain: string; version: number; sealed_at: string; n_files: number; algorithm: string } | null;
 }
 
 export interface Source {
@@ -73,6 +74,8 @@ export const api = {
   list: () => fetch("/api/v1/analyses").then((r) => j<any[]>(r)),
   queue: () => fetch("/api/v1/queue").then((r) => j<{ running: string | null; waiting: string[] }>(r)),
   layers: (id: string) => fetch(`/api/spill/${id}/layers`).then((r) => j<Layers>(r)),
+  impact: (id: string) => fetch(`/api/spill/${id}/impact`, { method: "POST" }).then((r) => j<any>(r)),
+  verify: (id: string) => fetch(`/api/spill/${id}/verify`).then((r) => j<any>(r)),
   scenes: (bbox: BBox, start: string, end: string) =>
     fetch(`/api/v1/scenes?bbox=${bbox.map((v) => v.toFixed(4)).join(",")}&start=${start}&end=${end}`).then((r) => j<Scene[]>(r)),
   detect: (scene_id: string, aoi: BBox, resolution_m: number, threshold?: number) =>

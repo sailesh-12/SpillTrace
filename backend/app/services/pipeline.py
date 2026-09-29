@@ -717,6 +717,35 @@ def stage_ais_and_score(an: Analysis, ais_mode: str | None = None) -> dict:
     return result
 
 
+def stage_impact(an: Analysis) -> dict | None:
+    """Severity index, shoreline/receptor threat, response plan, next-port intercepts, ranking robustness and a
+    POLREP draft. Advisory: a failure here never fails the investigation."""
+    from app.impact.service import assess_impact
+    an.emit("REPORT", "Assessing impact: severity index, shoreline threat, response plan")
+    try:
+        imp = assess_impact(an)
+        sev = imp["severity"]
+        an.emit("REPORT", f"Spill Severity & Impact Index {sev['score']:.0f}/100 ({sev['level']}); "
+                          f"{len(imp['response']['actions'])} response actions suggested")
+        return imp
+    except Exception as exc:
+        log.warning("impact assessment failed for %s: %s", an.id, exc, exc_info=True)
+        an.warn(f"Impact assessment unavailable: {exc}")
+        return None
+
+
+def stage_seal(an: Analysis) -> dict | None:
+    """Tamper-evident SHA-256 manifest of all evidence artifacts (chain of custody)."""
+    from app.impact.service import seal_evidence
+    try:
+        m = seal_evidence(an)
+        an.emit("REPORT", f"Evidence sealed: {m['n_files']} files, SHA-256 root {m['root'][:12]}…")
+        return m
+    except Exception as exc:
+        log.warning("evidence seal failed for %s: %s", an.id, exc)
+        return None
+
+
 def stage_report(an: Analysis) -> dict:
     from app.reports.report import build_report, render_html, render_markdown
     an.emit("REPORT", "Generating investigator report")
@@ -819,8 +848,11 @@ def run_investigation(cfg: Config, analysis_id: str, component_ids: list[str] | 
             an.emit("REPORT", exc.message, status="PARTIAL")
             return
         stage_ais_and_score(an, ais_mode)
+        if an.cfg.get("impact", {}).get("enabled", True):
+            stage_impact(an)
         an.state["outcome"] = "COMPLETED"
         stage_report(an)
+        stage_seal(an)
         an.emit("COMPLETED", "Investigation complete", status="COMPLETED")
     _guard(an, go)
     return an

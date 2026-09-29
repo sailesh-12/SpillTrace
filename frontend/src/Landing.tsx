@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertTriangle, Anchor, ArrowRight, BookOpen, Braces, Cpu, Database, FileText, Gauge, Globe2, HeartPulse,
-  Layers, ListOrdered, Radar, Satellite, Scale, Ship, ShieldCheck, Terminal, Waves as WavesIcon, Wind,
+  Layers, ListOrdered, Radar, Satellite, Scale, Ship, ShieldAlert, ShieldCheck, Terminal, Waves as WavesIcon, Wind,
 } from "lucide-react";
 import ParticleField from "@/components/ParticleField";
 import OceanMap from "@/components/OceanMap";
@@ -39,6 +39,7 @@ const STEPS = [
   { key: "investigation", icon: Anchor, t: "Hindcast", d: "OpenDrift/OpenOil runs the slick backwards in time with real currents and wind, giving probable source regions per hour." },
   { key: "candidates", icon: Ship, t: "Candidates", d: "AIS tracks (real, or SYNTHETIC for demonstration) are matched to the backtracked oil in space and time; up to 10 vessels are ranked." },
   { key: "evidence", icon: FileText, t: "Evidence", d: "An explainable Evidence Correlation Score, per-factor breakdown, uncertainties and a downloadable report." },
+  { key: "impact", icon: ShieldAlert, t: "Impact & response", d: "Severity index, shoreline ETA to sensitive sites, prioritised actions for ICG, next-port intercept, sealed evidence and a POLREP draft." },
 ];
 
 const DATA = [
@@ -60,6 +61,9 @@ const ENDPOINTS: Ep[] = [
   { method: "GET", path: "/api/v1/analyses", href: "/api/v1/analyses", d: "All investigations and their status", icon: ListOrdered, check: "/api/v1/analyses" },
   { method: "GET", path: "/api/v1/queue", href: "/api/v1/queue", d: "Job queue (one analysis runs at a time)", icon: Layers, check: "/api/v1/queue" },
   { method: "GET", path: "/api/spill/{id}/report", d: "Evidence report (HTML / JSON / Markdown)", icon: FileText },
+  { method: "POST", path: "/api/spill/{id}/impact", d: "Severity index, shoreline threat, response plan (re-seals)", icon: ShieldAlert },
+  { method: "GET", path: "/api/spill/{id}/verify", d: "Verify the SHA-256 evidence seal (chain of custody)", icon: ShieldCheck },
+  { method: "GET", path: "/api/spill/{id}/polrep", d: "Draft pollution report (POLREP) for the MRCC", icon: FileText },
 ];
 
 function scrollTo(id: string) { document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
@@ -207,12 +211,12 @@ export default function Landing() {
 
         {/* ---------------- how ---------------- */}
         <section id="how" ref={howRef} className="mx-auto max-w-7xl scroll-mt-20 px-4 pb-20 sm:px-6">
-          <SectionTitle kicker="THE PIPELINE" title="How it works — five steps, one console" />
+          <SectionTitle kicker="THE PIPELINE" title="How it works — six steps, one console" />
           <div className="relative mb-5 hidden h-1 overflow-hidden rounded-full bg-slate-800/80 md:block">
             <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-400 to-orange-400 shadow-[0_0_12px_rgb(34_211_238/0.7)]"
               style={{ width: `${(howFill * 100).toFixed(1)}%` }} />
           </div>
-          <div className="grid gap-4 md:grid-cols-5">
+          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             {STEPS.map((s, i) => {
               const lit = howFill >= (i + 0.5) / STEPS.length;
               return (

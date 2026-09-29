@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Anchor, Check, ChevronDown, Database, FileText, Home, Layers as LayersIcon, ListTree, Maximize2, Radar, Ship, Waves } from "lucide-react";
+import { AlertTriangle, Anchor, Check, ChevronDown, Database, FileText, Home, Layers as LayersIcon, ListTree, Maximize2, Radar, ShieldAlert, Ship, Waves } from "lucide-react";
+import ImpactPanel from "@/components/ImpactPanel";
 import { Brand, LivePill, UtcClock } from "@/components/chrome";
 import { Toaster, toast } from "sonner";
 import { api, BBox, Candidate, Layers, ProgressEvent, Scene, Source, TriageRow } from "@/api";
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils";
 
 const VISIBLE: Record<LayerKey, boolean> = {
   sar: true, slicks: true, selected: true, particles: true, heatmap: true, regions: true, ais: true, vessels: true,
-  forward: true, sarships: true,
+  forward: true, sarships: true, impact: true,
 };
 const STEPS = [
   { key: "search", label: "Area & scene", icon: Radar, hint: "Choose a box over Indian waters and a Sentinel-1 pass (or a SYNTHETIC scene)." },
@@ -23,6 +24,7 @@ const STEPS = [
   { key: "investigation", label: "Hindcast", icon: Anchor, hint: "Backward OpenOil drift with currents and wind; probable source regions." },
   { key: "candidates", label: "Candidates", icon: Ship, hint: "Vessels whose AIS tracks correlate with the backtracked oil (max 10)." },
   { key: "evidence", label: "Evidence", icon: FileText, hint: "Per-factor score, statements, supporting / contradicting / missing evidence." },
+  { key: "impact", label: "Impact & response", icon: ShieldAlert, hint: "Severity index, shoreline threat, immediate actions, intercepts and evidence seal." },
 ] as const;
 type Tab = typeof STEPS[number]["key"];
 
@@ -173,7 +175,7 @@ export default function App({ initialStep }: { initialStep?: string }) {
     }
   };
   const stepDone = (k: Tab) => ({ search: !!data, triage: !!data?.triage, investigation: !!data?.drift,
-    candidates: !!data?.candidates, evidence: !!selected }[k]);
+    candidates: !!data?.candidates, evidence: !!selected, impact: !!data?.impact }[k]);
   const warnings: string[] = data?.analysis?.warnings ?? [];
 
   return (
@@ -269,6 +271,7 @@ export default function App({ initialStep }: { initialStep?: string }) {
               <TabsContent value="investigation">{data ? <InvestigationPanel d={data} /> : null}</TabsContent>
               <TabsContent value="candidates">{data ? <CandidatesPanel d={data} selected={selected} select={selectCandidate} /> : null}</TabsContent>
               <TabsContent value="evidence"><EvidencePanel c={selected} /></TabsContent>
+              <TabsContent value="impact">{data ? <ImpactPanel d={data} reload={() => aid && load(aid, "impact")} /> : null}</TabsContent>
             </div>
           </Tabs>
           <p className="border-t px-3 py-2 text-[10px] leading-snug text-muted-foreground">Investigative decision support. Rankings reflect evidence
@@ -302,7 +305,8 @@ export default function App({ initialStep }: { initialStep?: string }) {
               <ListTree className="size-3.5" />Legend<ChevronDown className={cn("ml-auto size-3.5 transition", !legendOpen && "-rotate-90")} /></button>
             {legendOpen && <div className="grid gap-1 px-2.5 pb-2.5">
               {[["#ff5a1f", "Oil-likely"], ["#facc15", "Uncertain"], ["#4ade80", "Look-alike likely"], ["#67e8f9", "Hindcast particles"],
-                ["#c084fc", "Forecast / affected area"], ["#ef4444", "50 % source region"], ["#22d3ee", "Selected vessel"]].map(([c, l]) =>
+                ["#c084fc", "Forecast / affected area"], ["#ef4444", "50 % source region"], ["#22d3ee", "Selected vessel"],
+                ["#fb923c", "Threatened receptor / shore ETA"]].map(([c, l]) =>
                 <div key={l} className="flex items-center gap-2 text-slate-300"><span className="h-2 w-3.5 rounded-sm" style={{ background: c, boxShadow: `0 0 6px ${c}` }} />{l}</div>)}
             </div>}
           </div>
@@ -315,6 +319,8 @@ export default function App({ initialStep }: { initialStep?: string }) {
               ["Hindcast", data.drift ? `${data.drift.n_members} members` : "—"],
               ["Candidates", data.candidates ? String(cands.length) : "—"],
               ["Top", top ? `${top.vessel.name ?? top.vessel.mmsi} · ${top.score.toFixed(0)}` : "—"],
+              ["Severity", data.impact ? `${data.impact.severity.score.toFixed(0)} · ${data.impact.severity.level}` : "—"],
+              ["Shore ETA", data.impact?.threat?.beaching?.eta_hours != null ? `${data.impact.threat.beaching.eta_hours.toFixed(0)} h` : "—"],
             ];
             return (
               <div className="pointer-events-none absolute right-14 top-14 hidden w-60 rounded-xl border border-slate-700/60 bg-slate-950/80 p-3 backdrop-blur-md xl:block">

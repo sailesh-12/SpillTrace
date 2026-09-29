@@ -17,7 +17,7 @@ never "vessel X caused the spill". Scores are an uncalibrated **Evidence Correla
   synthetic AIS: "Real AIS if available may be used else synthetic data can be prepared for the region of oil spill to
   demonstrate the functioning of the algorithm." Synthetic data is labelled SYNTHETIC everywhere (see README §4b).
 - End-to-end verified via API/UI on real scenes: fresh area ≈ 10 min (mostly one-time AIS day downloads,
-  ~0.5–0.7 GB each); repeat investigation in a cached area ≈ 1–1.5 min. 47 tests pass (offline fixtures).
+  ~0.5–0.7 GB each); repeat investigation in a cached area ≈ 1–1.5 min. 54 tests pass (offline fixtures).
 
 ## Architecture (modular monolith)
 ```
@@ -100,6 +100,13 @@ CLI: `python main.py scenes|detect|triage|investigate|report|run|list` (see READ
   headline, typewriter, scroll reveals, count-ups, scroll-linked pipeline bar and ship on waves (components/motion.tsx,
   OceanMap.tsx, Waves.tsx; honours prefers-reduced-motion). Console: step header, collapsible notices/callouts,
   candidate cards, score ring, stage stepper, investigation HUD, collapsible legend.
+
+## Novelty layer: impact & response (backend/app/impact/)
+- stage_impact (after scoring) -> impact.json: SSII severity index + NOS-DCP tier, shoreline ETA (forward model or
+  extrapolated), threatened receptors (gazetteer.py, approximate), response action plan (response.py), next-port
+  intercepts (intercept.py, same-basin), ranking robustness (robustness.py), POLREP draft. stage_seal -> evidence_manifest.json
+  (custody.py, SHA-256 + chain). Failures only add a warning. Console step 6 "Impact & response"; map layer "impact".
+- Coast from GSHHG polygons (coast.py, cached per process, warmed at API start).
 
 ## AIS modes (real vs synthetic)
 - Selection: `backend/app/ais/selection.py`; config `ais.mode`, `ais.real_provider`, `ais.synthetic.*`; per-run override

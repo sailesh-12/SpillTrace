@@ -96,6 +96,7 @@ def build_report(an) -> dict:
         "multitemporal": cand.get("multitemporal") if cand else None,
         "score_disclaimer": cand.get("disclaimer") if cand else None,
         "weights": cand.get("weights") if cand else None,
+        "impact": _try(an, "impact.json"),
         "assumptions": assumptions,
         "limitations": limitations,
         "legal_notice": LEGAL,
@@ -198,6 +199,31 @@ def render_markdown(r: dict) -> str:
     if r.get("filtered_out"):
         L += ["", "### Vessels filtered out (with reasons)"] + \
              [f"- {v['name'] or v['mmsi']} ({v['vessel_type']}): {v['reason']}" for v in r["filtered_out"]]
+    imp = r.get("impact")
+    if imp:
+        sv, th = imp["severity"], imp["threat"]
+        L += ["", "## 6b. Impact assessment & immediate response  _(MODEL-DERIVED / DECISION SUPPORT)_",
+              f"**{sv['name']}: {sv['score']:.0f} / 100 — {sv['level']}** · planning estimate {sv['response_tier']['central']} "
+              f"({sv['response_tier']['basis']})",
+              f"- Estimated volume {sv['volume_estimate']['m3']['low']:.1f}–{sv['volume_estimate']['m3']['high']:.0f} m³ "
+              f"({sv['volume_estimate']['basis']})"]
+        L += [f"- {k}: {v['value'] * 100:.0f} % × weight {v['weight']:.2f} — {v['evidence']}" for k, v in sv["components"].items()]
+        b = th["beaching"]
+        if th.get("distance_to_coast_km") is not None:
+            L.append(f"- Nearest shoreline: {th['distance_to_coast_km']:.1f} km")
+        L.append(f"- Shoreline threat: " + (f"~{b['eta_hours']:.0f} h to {b['landing_place']} ({b['note']})"
+                                            if b.get("eta_hours") is not None else b.get("note", "none")))
+        thr = [s for s in th["sites"] if s["threatened"]]
+        if thr:
+            L += ["", "| Threatened receptor | Type | Sensitivity | ETA (h) |", "|---|---|---|---|"]
+            L += [f"| {s['name']} | {s['type_label']} | {s['weight']}/10 | {s['eta_hours']:.0f} |" for s in thr]
+        L += ["", f"**Immediate actions** (report to {imp['response']['mrcc']['name']}):", "",
+              "| # | Priority | Within (h) | Action | Agency |", "|---|---|---|---|---|"]
+        L += [f"| {a['id']} | {a['priority']} | {a['deadline_hours']:.0f} | {a['title']} | {a['agency']} |" for a in imp["response"]["actions"]]
+        L += [f"- {n}" for n in imp["response"]["notes"]]
+        if imp.get("robustness", {}).get("available"):
+            L += ["", f"**Ranking robustness:** {imp['robustness']['note']}"]
+        L += ["", "_Sensitive-site coordinates are approximate reference points, not official ESI maps._"]
     L += ["", "## 7. Assumptions  _(ASSUMPTION)_"] + [f"- {a}" for a in r["assumptions"]]
     L += ["", "## 8. Limitations"] + [f"- {a}" for a in r["limitations"]]
     return "\n".join(L) + "\n"

@@ -94,3 +94,20 @@ def test_synthetic_ais_investigation_is_labelled_end_to_end(cfg, e2e):
     assert "SYNTHETIC" in md and "not real" in md.lower()
     assert any("SYNTHETIC" in w for w in an.state["warnings"])
     assert an.load("ais/synthetic_truth.json")["vessels"]
+
+
+def test_impact_assessment_and_evidence_seal_end_to_end(cfg, e2e, monkeypatch):
+    imp = e2e.load("impact.json")
+    assert 0 <= imp["severity"]["score"] <= 100 and imp["severity"]["level"] in ("LOW", "MODERATE", "HIGH", "CRITICAL")
+    assert imp["response"]["actions"] and imp["polrep"].startswith("POLREP")
+    assert imp["robustness"]["available"]
+    md = (e2e.repo.dir(e2e.id) / "report.md").read_text(encoding="utf-8")
+    assert "Spill Severity & Impact Index" in md and "Immediate actions" in md
+    from fastapi.testclient import TestClient
+    import app.api.main as api
+    monkeypatch.setattr(api, "cfg", cfg)
+    client = TestClient(api.app)
+    assert client.get(f"/api/spill/{e2e.id}/verify").json()["ok"] is True
+    assert "NOT SENT" in client.get(f"/api/spill/{e2e.id}/polrep").text
+    lay = client.get(f"/api/spill/{e2e.id}/layers").json()
+    assert lay["impact"]["severity"] and lay["evidence_seal"]["root"]

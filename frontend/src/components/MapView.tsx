@@ -3,7 +3,7 @@ import maplibregl, { GeoJSONSource, Map as MLMap } from "maplibre-gl";
 import type { BBox, Candidate, FC, Layers, Scene, TriageRow } from "@/api";
 
 export type LayerKey =
-  | "sar" | "slicks" | "selected" | "particles" | "heatmap" | "regions" | "ais" | "vessels" | "forward" | "sarships";
+  | "sar" | "slicks" | "selected" | "particles" | "heatmap" | "regions" | "ais" | "vessels" | "forward" | "sarships" | "impact";
 
 export const LAYER_LABELS: Record<LayerKey, string> = {
   sar: "Sentinel-1 SAR image",
@@ -16,6 +16,7 @@ export const LAYER_LABELS: Record<LayerKey, string> = {
   vessels: "Vessel positions at cursor time",
   forward: "Forward: projected affected region",
   sarships: "SAR point targets (possible vessels)",
+  impact: "Impact: sensitive sites & shoreline threat",
 };
 
 export interface TimeCursor { time: Date; kind: "backward" | "forward"; frame: number }
@@ -72,7 +73,7 @@ export default function MapView(props: {
     m.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     m.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
     m.on("load", () => {
-      ["aoi", "footprints", "slicks", "sel", "particles", "prob", "regions", "ais", "vessels", "best", "forward", "sarships"]
+      ["aoi", "footprints", "slicks", "sel", "particles", "prob", "regions", "ais", "vessels", "best", "forward", "sarships", "sites", "threat"]
         .forEach((id) => m.addSource(id, { type: "geojson", data: EMPTY }));
       m.addLayer({ id: "footprints-fill", type: "fill", source: "footprints",
         paint: { "fill-color": ["case", ["get", "active"], "#38bdf8", "#94a3b8"], "fill-opacity": ["case", ["get", "active"], 0.12, 0.03] } });
@@ -115,6 +116,22 @@ export default function MapView(props: {
       m.addLayer({ id: "vessels-label", type: "symbol", source: "vessels", filter: ["any", ["get", "selected"], ["get", "is_candidate"]],
         layout: { "text-field": ["get", "name"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-optional": true },
         paint: { "text-color": "#e2e8f0", "text-halo-color": "#0a1826", "text-halo-width": 1.5 } });
+      m.addLayer({ id: "threat-line", type: "line", source: "threat", filter: ["==", ["geometry-type"], "LineString"],
+        paint: { "line-color": ["match", ["get", "kind"], "landing", "#fb923c", "#94a3b8"], "line-width": 1.6, "line-dasharray": [2, 2] } });
+      m.addLayer({ id: "sites-halo", type: "circle", source: "sites",
+        paint: { "circle-radius": ["case", ["get", "threatened"], 14, 8], "circle-color": ["case", ["get", "threatened"], "#fb923c", "#64748b"],
+                 "circle-opacity": ["case", ["get", "threatened"], 0.18, 0.08], "circle-blur": 0.4 } });
+      m.addLayer({ id: "sites-pt", type: "circle", source: "sites",
+        paint: { "circle-radius": 4.5, "circle-color": ["case", ["get", "threatened"], "#fb923c", "#94a3b8"],
+                 "circle-stroke-color": "#0a1826", "circle-stroke-width": 1.5 } });
+      m.addLayer({ id: "sites-label", type: "symbol", source: "sites",
+        layout: { "text-field": ["get", "label"], "text-size": 10.5, "text-offset": [0, 1.2], "text-anchor": "top", "text-optional": true },
+        paint: { "text-color": ["case", ["get", "threatened"], "#fdba74", "#cbd5e1"], "text-halo-color": "#0a1826", "text-halo-width": 1.5 } });
+      m.addLayer({ id: "threat-pt", type: "circle", source: "threat", filter: ["==", ["geometry-type"], "Point"],
+        paint: { "circle-radius": 7, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#fb923c", "circle-stroke-width": 2.5 } });
+      m.addLayer({ id: "threat-label", type: "symbol", source: "threat", filter: ["==", ["geometry-type"], "Point"],
+        layout: { "text-field": ["get", "label"], "text-size": 11, "text-offset": [0, -1.4], "text-anchor": "bottom" },
+        paint: { "text-color": "#fdba74", "text-halo-color": "#0a1826", "text-halo-width": 1.6 } });
       m.addLayer({ id: "aoi-fill", type: "fill", source: "aoi", paint: { "fill-color": "#38bdf8", "fill-opacity": 0.06 } });
       m.addLayer({ id: "aoi-line", type: "line", source: "aoi", paint: { "line-color": "#38bdf8", "line-width": 2, "line-dasharray": [2, 1] } });
 
@@ -203,6 +220,24 @@ export default function MapView(props: {
       setData(m, "sarships", { type: "FeatureCollection", features: dets.filter((d: any) => d.lon != null).map((d: any) => ({
         type: "Feature", geometry: { type: "Point", coordinates: [d.lon, d.lat] }, properties: {} })) });
       setData(m, "sel", data.selected_geojson);
+      const th = data.impact?.threat;
+      setData(m, "sites", th ? { type: "FeatureCollection", features: th.sites.map((s: any) => ({ type: "Feature",
+        geometry: { type: "Point", coordinates: [s.lon, s.lat] }, properties: { threatened: s.threatened,
+          label: s.threatened && s.eta_hours != null ? `${s.name} · ${s.eta_hours < 72 ? s.eta_hours.toFixed(0) + " h" : (s.eta_hours / 24).toFixed(1) + " d"}` : s.name } })) } : null);
+      const tf: any[] = [];
+      const c0 = data.selected?.centroid;
+      if (th?.nearest_shore_point && c0) tf.push({ type: "Feature", properties: { kind: "nearest" },
+        geometry: { type: "LineString", coordinates: [[c0.lon, c0.lat], [th.nearest_shore_point.lon, th.nearest_shore_point.lat]] } });
+      const bl = th?.beaching?.landing_point;
+      if (bl) {
+        const from = th.drift_vector?.to ?? c0;
+        if (from) tf.push({ type: "Feature", properties: { kind: "landing" },
+          geometry: { type: "LineString", coordinates: [[from.lon, from.lat], [bl.lon, bl.lat]] } });
+        const h = th.beaching.eta_hours;
+        tf.push({ type: "Feature", properties: { label: `Shore ETA ${h < 72 ? h.toFixed(0) + " h" : (h / 24).toFixed(1) + " d"}` },
+          geometry: { type: "Point", coordinates: [bl.lon, bl.lat] } });
+      }
+      setData(m, "threat", { type: "FeatureCollection", features: tf });
       const b = new maplibregl.LngLatBounds();
       if (corners) corners.forEach((c: [number, number]) => b.extend(c));
       data.source_probability?.features.filter((f) => f.properties.kind === "source_region" && f.properties.level === "low")
@@ -277,6 +312,7 @@ export default function MapView(props: {
         sar: ["sar-img"], slicks: ["slicks-fill", "slicks-line"], selected: ["sel-line"], particles: ["particles-pt"],
         heatmap: ["prob-heat"], regions: ["regions-fill", "regions-line"], ais: ["ais-line", "best-pt"],
         vessels: ["vessels-pt", "vessels-label"], forward: ["forward-fill", "forward-line"], sarships: ["sarships-pt"],
+        impact: ["threat-line", "sites-halo", "sites-pt", "sites-label", "threat-pt", "threat-label"],
       };
       (Object.keys(groups) as LayerKey[]).forEach((k) => groups[k].forEach((id) => {
         if (m.getLayer(id)) m.setLayoutProperty(id, "visibility", visible[k] ? "visible" : "none");
