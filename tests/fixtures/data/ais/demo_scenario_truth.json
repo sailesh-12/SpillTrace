@@ -1,0 +1,58 @@
+{
+  "warning": "Planted scenario for validation. The pipeline never reads this file.",
+  "planted_release_time": "2025-06-09T17:04:00+00:00",
+  "planted_source": {
+    "lat": 18.743903347901828,
+    "lon": 71.6212742161854
+  },
+  "vessels": [
+    {
+      "mmsi": "419000101",
+      "name": "DEMO TANKER ALPHA",
+      "type": "tanker",
+      "role": "planted_source"
+    },
+    {
+      "mmsi": "419000202",
+      "name": "DEMO BULK BRAVO",
+      "type": "bulk_carrier",
+      "role": "decoy_near"
+    },
+    {
+      "mmsi": "419000303",
+      "name": "DEMO CONTAINER CHARLIE",
+      "type": "container",
+      "role": "nearest_vessel_trap"
+    },
+    {
+      "mmsi": "419000404",
+      "name": "DEMO CARGO DELTA",
+      "type": "cargo",
+      "role": "temporal_mismatch"
+    },
+    {
+      "mmsi": "419000501",
+      "name": "DEMO FISHING ECHO-1",
+      "type": "fishing",
+      "role": "background"
+    },
+    {
+      "mmsi": "419000502",
+      "name": "DEMO FISHING ECHO-2",
+      "type": "fishing",
+      "role": "background"
+    },
+    {
+      "mmsi": "419000601",
+      "name": "DEMO TUG FOXTROT",
+      "type": "tug",
+      "role": "background"
+    },
+    {
+      "mmsi": "419000701",
+      "name": "DEMO PASSENGER GOLF",
+      "type": "passenger",
+      "role": "background"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+# Target architecture: backend (API + dashboard) + PostgreSQL/PostGIS.
+#   docker compose up --build        -> http://localhost:8000
+# Large artifacts stay on the mounted ./outputs volume; PostGIS indexes analyses/spills/regions/candidates.
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: sih
+      POSTGRES_PASSWORD: sih
+      POSTGRES_DB: sih26143
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sih -d sih26143"]
+      interval: 5s
+      retries: 20
+
+  backend:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      SIH_STORAGE: postgis
+      SIH_POSTGIS_DSN: postgresql://sih:sih@postgres:5432/sih26143
+      MODEL_PATH: /app/models/best_oil_spill_deeplabv3_resnet34.pth
+    ports: ["8000:8000"]
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+
+volumes:
+  pgdata:
